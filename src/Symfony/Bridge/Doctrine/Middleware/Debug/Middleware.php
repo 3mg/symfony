@@ -23,6 +23,8 @@ use Symfony\Component\Stopwatch\Stopwatch;
  */
 final class Middleware implements MiddlewareInterface
 {
+    private ?\Closure $disabled = null;
+
     public function __construct(
         private readonly DebugDataHolder $debugDataHolder,
         private readonly ?Stopwatch $stopwatch,
@@ -31,8 +33,16 @@ final class Middleware implements MiddlewareInterface
     ) {
     }
 
+    /**
+     * @param \Closure(): bool $disabled
+     */
+    public function setProfilerStateChecker(\Closure $disabled): void
+    {
+        $this->disabled = $disabled;
+    }
+
     public function wrap(DriverInterface $driver): DriverInterface
     {
-        return new Driver($driver, $this->debugDataHolder, $this->stopwatch, $this->connectionName, $this->connectionRegistry);
+        return new Driver($driver, $this->debugDataHolder, $this->stopwatch, $this->connectionName, $this->connectionRegistry, $this->disabled);
     }
 }

@@ -4,6 +4,7 @@ CHANGELOG
 8.2
 ---
 
+ * Add `Debug\Middleware::setProfilerStateChecker()` to skip SQL tracing while the profiler is disabled
  * Add IterableToArrayCollectionTransformer for ObjectMapper
  * Throw a `ConstraintDefinitionException` from `UniqueEntity` when a checked field holds an array or is a to-many association, instead of building a query that cannot match
  * Allow using closures with the `#[MapEntity]` attribute

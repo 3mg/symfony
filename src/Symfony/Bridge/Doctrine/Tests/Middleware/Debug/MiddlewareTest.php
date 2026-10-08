@@ -39,7 +39,7 @@ class MiddlewareTest extends TestCase
         ClockMock::withClockMock(false);
     }
 
-    private function init(bool $withStopwatch = true): void
+    private function init(bool $withStopwatch = true, ?\Closure $disabled = null): void
     {
         $this->stopwatch = $withStopwatch ? new Stopwatch() : null;
 
@@ -47,7 +47,11 @@ class MiddlewareTest extends TestCase
         $config->setSchemaManagerFactory(new DefaultSchemaManagerFactory());
         $config->enableNativeLazyObjects(true);
         $this->debugDataHolder = new DebugDataHolder();
-        $config->setMiddlewares([new Middleware($this->debugDataHolder, $this->stopwatch)]);
+        $middleware = new Middleware($this->debugDataHolder, $this->stopwatch);
+        if (null !== $disabled) {
+            $middleware->setProfilerStateChecker($disabled);
+        }
+        $config->setMiddlewares([$middleware]);
 
         $this->conn = DriverManager::getConnection([
             'driver' => 'pdo_sqlite',
@@ -65,6 +69,50 @@ class MiddlewareTest extends TestCase
             	created_at TEXT NULL
             );
             EOT);
+    }
+
+    #[DataProvider('provideExecuteAndEndTransactionMethods')]
+    public function testDisabledProfilingDoesNotCollectQueriesOrPeriods(callable $sqlMethod, callable $endTransactionMethod)
+    {
+        $this->init(disabled: static fn () => true);
+
+        $this->conn->beginTransaction();
+        $sqlMethod($this->conn, 'SELECT * FROM products');
+        $endTransactionMethod($this->conn);
+
+        $this->assertSame([], $this->debugDataHolder->getData());
+        $this->assertSame([], $this->stopwatch->getSectionEvents('__root__'));
+    }
+
+    public function testProfilingCanBeToggledForAnExistingPreparedStatement()
+    {
+        $disabled = true;
+        $this->init(disabled: static function () use (&$disabled) {
+            return $disabled;
+        });
+        $statement = $this->conn->prepare('SELECT ?');
+        $statement->bindValue(1, 42, ParameterType::INTEGER);
+
+        $this->assertSame(42, $statement->executeQuery()->fetchOne());
+        $this->assertSame([], $this->debugDataHolder->getData());
+
+        $disabled = false;
+        $this->assertSame(42, $statement->executeQuery()->fetchOne());
+        $this->assertCount(1, $this->debugDataHolder->getData()['default']);
+        $this->assertSame([42], $this->debugDataHolder->getData()['default'][0]['params']);
+        $this->assertCount(1, $this->stopwatch->getEvent('doctrine')->getPeriods());
+
+        $disabled = true;
+        $statement->bindValue(1, 43, ParameterType::INTEGER);
+        $this->assertSame(43, $statement->executeQuery()->fetchOne());
+        $this->assertCount(1, $this->debugDataHolder->getData()['default']);
+        $this->assertCount(1, $this->stopwatch->getEvent('doctrine')->getPeriods());
+
+        $disabled = false;
+        $this->assertSame(43, $statement->executeQuery()->fetchOne());
+        $this->assertCount(2, $this->debugDataHolder->getData()['default']);
+        $this->assertSame([43], $this->debugDataHolder->getData()['default'][1]['params']);
+        $this->assertCount(2, $this->stopwatch->getEvent('doctrine')->getPeriods());
     }
 
     private function getResourceFromString(string $str)

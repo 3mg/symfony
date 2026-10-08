@@ -31,6 +31,7 @@ final class Connection extends AbstractConnectionMiddleware
         private readonly ?Stopwatch $stopwatch,
         private readonly string $connectionName,
         private readonly ?ConnectionRegistry $connectionRegistry = null,
+        private readonly ?\Closure $disabled = null,
     ) {
         parent::__construct($connection);
     }
@@ -44,11 +45,16 @@ final class Connection extends AbstractConnectionMiddleware
             $sql,
             $this->stopwatch,
             $this->connectionRegistry?->getConnection($this->connectionName),
+            $this->disabled,
         );
     }
 
     public function query(string $sql): Result
     {
+        if ($this->disabled?->__invoke()) {
+            return parent::query($sql);
+        }
+
         $query = new Query($sql, $this->connectionRegistry?->getConnection($this->connectionName));
         $this->debugDataHolder->addQuery($this->connectionName, $query);
 
@@ -65,6 +71,10 @@ final class Connection extends AbstractConnectionMiddleware
 
     public function exec(string $sql): int
     {
+        if ($this->disabled?->__invoke()) {
+            return parent::exec($sql);
+        }
+
         $query = new Query($sql, $this->connectionRegistry?->getConnection($this->connectionName));
         $this->debugDataHolder->addQuery($this->connectionName, $query);
 
@@ -83,6 +93,12 @@ final class Connection extends AbstractConnectionMiddleware
 
     public function beginTransaction(): void
     {
+        if ($this->disabled?->__invoke()) {
+            parent::beginTransaction();
+
+            return;
+        }
+
         $query = new Query('"START TRANSACTION"', $this->connectionRegistry?->getConnection($this->connectionName));
         $this->debugDataHolder->addQuery($this->connectionName, $query);
 
@@ -99,6 +115,12 @@ final class Connection extends AbstractConnectionMiddleware
 
     public function commit(): void
     {
+        if ($this->disabled?->__invoke()) {
+            parent::commit();
+
+            return;
+        }
+
         $query = new Query('"COMMIT"', $this->connectionRegistry?->getConnection($this->connectionName));
         $this->debugDataHolder->addQuery($this->connectionName, $query);
 
@@ -115,6 +137,12 @@ final class Connection extends AbstractConnectionMiddleware
 
     public function rollBack(): void
     {
+        if ($this->disabled?->__invoke()) {
+            parent::rollBack();
+
+            return;
+        }
+
         $query = new Query('"ROLLBACK"', $this->connectionRegistry?->getConnection($this->connectionName));
         $this->debugDataHolder->addQuery($this->connectionName, $query);
 

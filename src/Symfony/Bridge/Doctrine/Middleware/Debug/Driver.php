@@ -30,6 +30,7 @@ final class Driver extends AbstractDriverMiddleware
         private readonly ?Stopwatch $stopwatch,
         private readonly string $connectionName,
         private readonly ?ConnectionRegistry $connectionRegistry = null,
+        private readonly ?\Closure $disabled = null,
     ) {
         parent::__construct($driver);
     }
@@ -44,6 +45,7 @@ final class Driver extends AbstractDriverMiddleware
             $this->stopwatch,
             $this->connectionName,
             $this->connectionRegistry,
+            $this->disabled,
         );
     }
 }

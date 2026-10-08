@@ -35,6 +35,7 @@ final class Statement extends AbstractStatementMiddleware
         string $sql,
         private readonly ?Stopwatch $stopwatch = null,
         ?Connection $connection = null,
+        private readonly ?\Closure $disabled = null,
     ) {
         parent::__construct($statement);
 
@@ -50,6 +51,10 @@ final class Statement extends AbstractStatementMiddleware
 
     public function execute(): ResultInterface
     {
+        if ($this->disabled?->__invoke()) {
+            return parent::execute();
+        }
+
         // clone to prevent variables by reference to change
         $this->debugDataHolder->addQuery($this->connectionName, $query = clone $this->query);
 
